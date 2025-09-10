@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 (9/10/2025)
+
+- Add support for PICO-8 folding tabs `-->8` (PR [#72](https://github.com/japhib/pico8-ls/pull/72)) -- thanks [@ryugibo](https://github.com/ryugibo)!
+- Add `__sfx__` and `__music__` to lexer (PR [#70](https://github.com/japhib/pico8-ls/pull/70)) -- thanks [@akd-io](https://github.com/akd-io)!
+- Add builtin `tostring` function to docs (PR [#68](https://github.com/japhib/pico8-ls/pull/68)) -- thanks [@akd-io](https://github.com/akd-io)!
+
 ## 0.5.7 (11/08/2024)
 
 - Fix formatter removing necessary parentheses (issue [#51](https://github.com/japhib/pico8-ls/issues/50), PR [#67](https://github.com/japhib/pico8-ls/pull/67))
