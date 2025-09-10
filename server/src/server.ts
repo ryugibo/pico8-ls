@@ -1,7 +1,7 @@
 import {
   CompletionItem, CompletionItemTag, createConnection, DefinitionParams, Diagnostic, DiagnosticSeverity,
   DidChangeConfigurationNotification, DocumentFormattingParams, DocumentSymbol, DocumentSymbolParams,
-  ExecuteCommandParams, HoverParams, InitializeParams, InitializeResult, Location, Position, ProposedFeatures,
+  ExecuteCommandParams, FoldingRange, FoldingRangeParams, HoverParams, InitializeParams, InitializeResult, Location, Position, ProposedFeatures,
   Range, ReferenceParams, SignatureHelpParams, SignatureInformation, SymbolKind, TextDocumentPositionParams,
   TextDocuments, TextDocumentSyncKind, TextEdit, WorkspaceFolder,
 } from 'vscode-languageserver/node';
@@ -21,9 +21,12 @@ import Formatter, { FormatterOptions } from './parser/formatter';
 import {
   findProjects, getProjectFiles, iterateProject, ParsedDocumentsMap, Project, ProjectDocument, ProjectDocumentNode,
 } from './projects';
+import { Comment_ } from './parser/expressions';
+import { FoldingRangeVisitor } from './parser/folding-range-visitor';
 import * as url from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getFoldingRegions } from './parser/folding-regions';
 
 console.log('PICO-8 Language Server starting.');
 
@@ -57,6 +60,7 @@ connection.onInitialize((params: InitializeParams) => {
       hoverProvider: true,
       signatureHelpProvider: { triggerCharacters: [ '(' ], retriggerCharacters: [ ',' ] },
       documentFormattingProvider: true,
+      foldingRangeProvider: true,
       executeCommandProvider: {
         commands: [
           'pico8formatFile',
@@ -481,7 +485,38 @@ function parseTextDocument(textDocument: TextDocument): ProjectDocument | undefi
 
     // Set document info in caches
     const symbolInfo: DocumentSymbol[] = symbols.map(sym => toDocumentSymbol(textDocument, sym));
-    documentSymbols.set(textDocument.uri, symbolInfo);
+    const foldingRegions = getFoldingRegions(textDocument, chunk.comments || []);
+    const rootSymbols: DocumentSymbol[] = [];
+    const regionSymbols: DocumentSymbol[] = foldingRegions.map(region => {
+      const range = Range.create(region.startLine, 0, region.endLine, 0);
+      const regionSymbol = DocumentSymbol.create(
+        region.name,
+        '',
+        SymbolKind.Namespace,
+        range,
+        range,
+      );
+      regionSymbol.children = [];
+      return regionSymbol;
+    });
+
+    for (const symbol of symbolInfo) {
+      let parent: DocumentSymbol | undefined;
+      for (const regionSymbol of regionSymbols) {
+        if (regionSymbol.range.start.line <= symbol.range.start.line && regionSymbol.range.end.line >= symbol.range.end.line) {
+          parent = regionSymbol;
+          break;
+        }
+      }
+
+      if (parent) {
+        parent.children!.push(symbol);
+      } else {
+        rootSymbols.push(symbol);
+      }
+    }
+
+    documentSymbols.set(textDocument.uri, rootSymbols.concat(regionSymbols));
     documentIncludes.set(textDocument.uri, includes!);
 
     // send errors back to client immediately
@@ -777,6 +812,66 @@ connection.onSignatureHelp((params: SignatureHelpParams) => {
 connection.onDocumentFormatting((params: DocumentFormattingParams) => {
   const formatResult = executeCommand_formatDocument(params.textDocument.uri, params.options);
   return formatResult ? [ formatResult ] : null;
+});
+
+function getFoldingRangesFromSymbols(symbols: DocumentSymbol[]): FoldingRange[] {
+  const ranges: FoldingRange[] = [];
+
+  for (const symbol of symbols) {
+    if (symbol.range.start.line < symbol.range.end.line) {
+      ranges.push({
+        startLine: symbol.range.start.line,
+        endLine: symbol.range.end.line,
+        kind: symbol.kind === SymbolKind.Namespace ? 'region' : undefined,
+      });
+    }
+
+    if (symbol.children) {
+      ranges.push(...getFoldingRangesFromSymbols(symbol.children));
+    }
+  }
+
+  return ranges;
+}
+
+function getCommentFoldingRanges(comments: Comment_[]): FoldingRange[] {
+  const ranges: FoldingRange[] = [];
+  for (const comment of comments) {
+    if (comment.loc && comment.loc.start.line < comment.loc.end.line) {
+      ranges.push({
+        startLine: comment.loc.start.line - 1,
+        endLine: comment.loc.end.line - 1,
+        kind: 'comment',
+      });
+    }
+  }
+  return ranges;
+}
+
+connection.onFoldingRanges((params: FoldingRangeParams): FoldingRange[] => {
+  const uri = params.textDocument.uri;
+  const parsedDocument = parsedDocuments.get(uri);
+  if (!parsedDocument) {
+    return [];
+  }
+
+  // 1. Get ranges from symbols (for PICO-8 regions and functions/vars)
+  const symbols = documentSymbols.get(uri) || [];
+  const symbolRanges = getFoldingRangesFromSymbols(symbols);
+
+  // 2. Get ranges from AST blocks (if, for, while, etc.)
+  const visitor = new FoldingRangeVisitor();
+  visitor.visit(parsedDocument.chunk);
+  const blockRanges = visitor.ranges;
+
+  // 3. Get ranges from multi-line comments
+  const commentRanges = getCommentFoldingRanges(parsedDocument.chunk.comments || []);
+
+  // 4. Combine and deduplicate
+  const allRanges = [ ...symbolRanges, ...blockRanges, ...commentRanges ];
+  const uniqueRanges = Array.from(new Map(allRanges.map(r => [ `${r.startLine}-${r.endLine}`, r ])).values());
+
+  return uniqueRanges;
 });
 
 connection.onExecuteCommand((params: ExecuteCommandParams) => {
