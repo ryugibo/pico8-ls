@@ -27,6 +27,7 @@ import * as url from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getFoldingRegions } from './parser/folding-regions';
+import { getTabLineNumbers } from './parser/tab-line-numbers';
 
 console.log('PICO-8 Language Server starting.');
 
@@ -534,6 +535,15 @@ function parseTextDocument(textDocument: TextDocument): ProjectDocument | undefi
     return undefined;
   }
 }
+
+connection.onRequest('pico8/getTabLineNumbers', (params: { uri: string }): { range: Range, lineInTab: number }[] => {
+  const doc = documents.get(params.uri);
+  if (!doc || doc.languageId !== 'pico-8') {
+    return [];
+  }
+
+  return getTabLineNumbers(doc.getText());
+});
 
 connection.onDocumentSymbol((params: DocumentSymbolParams) => {
   return documentSymbols.get(params.textDocument.uri);

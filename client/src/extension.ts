@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { ExtensionContext, Position, Range, TextEdit, TextEditorEdit, commands, languages, window, workspace } from 'vscode';
+import { ExtensionContext, Position, Range, TextEdit, TextEditorEdit, commands, languages, window, workspace, TextEditor, DecorationOptions, TextEditorDecorationType } from 'vscode';
 import { CloseAction, ErrorAction, ExecuteCommandParams, LanguageClient, LanguageClientOptions, Message, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import SemanticTokenProvider, { legend } from './semantic-token-provider';
 
@@ -12,6 +12,13 @@ type FormatterOptions = {
   // Force each statement to be on a separate line.
   forceSeparateLines?: boolean,
 };
+
+export interface TabLineNumber {
+  range: Range;
+  lineInTab: number;
+}
+
+let decorationType: TextEditorDecorationType;
 
 export function activate(context: ExtensionContext): void {
   languages.registerDocumentSemanticTokensProvider(
@@ -40,12 +47,71 @@ export function activate(context: ExtensionContext): void {
   // starts both client and server
   const disposable = client.start();
 
+  client.onReady().then(() => {
+    // Tab-relative line numbers
+    decorationType = window.createTextEditorDecorationType({
+      before: {
+        contentText: '',
+        color: 'rgba(153, 153, 153, 0.5)',
+        margin: '0 1em 0 0',
+        width: '3ch',
+      },
+      rangeBehavior: 1, // ClosedClosed
+    });
+
+    let activeEditor = window.activeTextEditor;
+    if (activeEditor) {
+      updateDecorations(activeEditor, client);
+    }
+
+    window.onDidChangeActiveTextEditor(editor => {
+      activeEditor = editor;
+      if (editor) {
+        updateDecorations(editor, client);
+      }
+    }, null, context.subscriptions);
+
+    workspace.onDidChangeTextDocument(event => {
+      if (activeEditor && event.document === activeEditor.document) {
+        updateDecorations(activeEditor, client);
+      }
+    }, null, context.subscriptions);
+  });
+
   // So the client gets deactivated on extension deactivation
   context.subscriptions.push(disposable);
 }
 
+function updateDecorations(editor: TextEditor, client: LanguageClient) {
+  const doc = editor.document;
+  if (doc.languageId !== 'pico-8') {
+    editor.setDecorations(decorationType, []);
+    return;
+  }
+
+  const params = {
+    uri: doc.uri.toString(),
+  };
+
+  client.sendRequest<TabLineNumber[]>('pico8/getTabLineNumbers', params).then((decorationsData) => {
+    const decorations: DecorationOptions[] = decorationsData.map(data => ({
+      range: new Range(new Position(data.range.start.line, data.range.start.character), new Position(data.range.end.line, data.range.end.character)),
+      renderOptions: {
+        before: {
+          contentText: `${data.lineInTab}`.padStart(3),
+        },
+      },
+    }));
+    editor.setDecorations(decorationType, decorations);
+  }, (error) => {
+    // void window.showErrorMessage('Could not retrieve tab line numbers. Please report an issue on GitHub.');
+    console.error('Could not retrieve tab line numbers.', error);
+  });
+}
+
 // Get options for running Node language server
 function getServerOptions(context: ExtensionContext): ServerOptions {
+
   const serverModule = context.asAbsolutePath(path.join('server', 'out-min', 'main.js'));
 
   // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging
