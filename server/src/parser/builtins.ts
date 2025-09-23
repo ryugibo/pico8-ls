@@ -677,6 +677,15 @@ export const Builtins: { [key: string]: BuiltinFunctionInfo } = {
       'member: The member to read.',
     ],
   },
+  load: {
+    sig: 'load( filename, [breadcrumb], [param] )',
+    desc: 'Loads a cartridge, completely replacing the current cart in memory and beginning to execute immediately.',
+    params: [
+      'filename: Either the name of the cartridge file, a BBS cart ID in the form "#mycartid123", or "@clip" to load a cartridge from the system clipboard copied from the BBS.',
+      'breadcrumb: Adds an item to the pause menu to return to the original cart.',
+      'param: An arbitrary string value that can be accessed by the loaded cart using stat(6).',
+    ],
+  },
   reload: {
     sig: 'reload( destaddr, sourceaddr, len, [filename] )',
     desc: 'Loads a region of data from the cartridge, or from another cartridge, into memory.',
