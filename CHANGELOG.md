@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (9/23/2025)
+
+- Fix for `#region` region markers (PR [#76](https://github.com/japhib/pico8-ls/pull/76)) -- thanks [@ryugibo](https://github.com/ryugibo)!
+- Add new builtins `rrect` and `rrectfill`, and missing `load` (PR [#73](https://github.com/japhib/pico8-ls/pull/73)) -- thanks [@songbirdgamedev](https://github.com/songbirdgamedev)!
+- Support for hexadecimal fractions like `0x.1` (issue [#74](https://github.com/japhib/pico8-ls/issues/74) -- thanks [@avi-0](https://github.com/avi-0) for reporting)
+
 ## 0.6.0 (9/10/2025)
 
 - Add support for PICO-8 folding tabs `-->8` (PR [#72](https://github.com/japhib/pico8-ls/pull/72)) -- thanks [@ryugibo](https://github.com/ryugibo)!
