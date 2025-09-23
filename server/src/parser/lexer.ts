@@ -573,17 +573,25 @@ export default class Lexer {
       fractionStart, exponentStart;
 
     const digitStart = this.index += 2; // Skip 0x part
+    let digit;
 
-    // A minimum of one hex digit is required.
-    if (!isHexDigit(this.input.charCodeAt(this.index))) {
-      this.raiseErr(errMessages.malformedNumber, this.input.slice(this.tokenStart, this.index));
-    }
+    let needAtLeastOneFractionalDigit = false;
+    // Support for numbers like 0x.1
+    if ('.' !== this.input.charAt(this.index)) {
+      // A minimum of one hex digit is required.
+      if (!isHexDigit(this.input.charCodeAt(this.index))) {
+        this.raiseErr(errMessages.malformedNumber, this.input.slice(this.tokenStart, this.index));
+      }
 
-    while (isHexDigit(this.input.charCodeAt(this.index))) {
-      ++this.index;
+      while (isHexDigit(this.input.charCodeAt(this.index))) {
+        ++this.index;
+      }
+      // Convert the hexadecimal digit to base 10.
+      digit = parseInt(this.input.slice(digitStart, this.index), 16);
+    } else {
+      digit = 0;
+      needAtLeastOneFractionalDigit = true;
     }
-    // Convert the hexadecimal digit to base 10.
-    const digit = parseInt(this.input.slice(digitStart, this.index), 16);
 
     // Fraction part is optional.
     let foundFraction = false;
@@ -592,8 +600,14 @@ export default class Lexer {
       fractionStart = ++this.index;
 
       while (isHexDigit(this.input.charCodeAt(this.index))) {
+        needAtLeastOneFractionalDigit = false;
         ++this.index;
       }
+
+      if (needAtLeastOneFractionalDigit) {
+        this.raiseErr(errMessages.malformedNumber, this.input.slice(this.tokenStart, this.index));
+      }
+
       const fracStr = this.input.slice(fractionStart, this.index);
 
       // Empty fraction parts should default to 0, others should be converted

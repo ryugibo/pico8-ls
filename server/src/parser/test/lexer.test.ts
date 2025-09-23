@@ -89,6 +89,32 @@ describe('Lexer', () => {
       assertNoMoreTokens(tokens);
     });
 
+    it('NumericLiteral - hexadecimal', () => {
+      const tokens = getLexedTokens('0x34 0x1 0x01 0x0.1 0x00.1 0x0.aa 0x3a.1 0x.1');
+      assertNextToken(tokens, TokenType.NumericLiteral, 52);
+      assertNextToken(tokens, TokenType.NumericLiteral, 1);
+      assertNextToken(tokens, TokenType.NumericLiteral, 1);
+      assertNextToken(tokens, TokenType.NumericLiteral, 0.0625);
+      assertNextToken(tokens, TokenType.NumericLiteral, 0.0625);
+      assertNextToken(tokens, TokenType.NumericLiteral, 0.6640625);
+      assertNextToken(tokens, TokenType.NumericLiteral, 58.0625);
+      assertNextToken(tokens, TokenType.NumericLiteral, 0.0625);
+      assertNoMoreTokens(tokens);
+    });
+
+    it('NumericLiteral - malformed hexadecimal fraction', () => {
+      assert.throws(() => {
+        getLexedTokens('0x.');
+      }, ParseError);
+    });
+
+    it('NumericLiteral - hexadecimal with exponents', () => {
+      const tokens = getLexedTokens('0x3p1 0x3p-2');
+      assertNextToken(tokens, TokenType.NumericLiteral, 6);
+      assertNextToken(tokens, TokenType.NumericLiteral, 0.75);
+      assertNoMoreTokens(tokens);
+    });
+
     describe('Punctuators', () => {
       function assertLexesOperators(...ops: string[]) {
         const tokens = getLexedTokens(ops.join(' '));
