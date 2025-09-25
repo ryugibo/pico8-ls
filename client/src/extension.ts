@@ -98,7 +98,7 @@ function updateDecorations(editor: TextEditor, client: LanguageClient) {
       range: new Range(new Position(data.range.start.line, data.range.start.character), new Position(data.range.end.line, data.range.end.character)),
       renderOptions: {
         before: {
-          contentText: `${data.lineInTab}`.padStart(3),
+          contentText: `${data.lineInTab}`.padStart(3, '\u00A0'),
         },
       },
     }));
